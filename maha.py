@@ -29,6 +29,8 @@ def run():
     print("Starting script...")
     debug_payload = {}
 
+    browser = None      # << FIX HERE
+
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch(
@@ -49,10 +51,10 @@ def run():
 
             page = context.new_page()
 
-            # Capture browser console logs
+            # Capture console logs
             page.on("console", lambda msg: print(f"Console log: {msg.type}: {msg.text}"))
 
-            # Log all network requests (you can comment this out if too verbose)
+            # Capture network requests (optional)
             def log_request(route, request):
                 print(f"Network request: {request.method} {request.url}")
                 route.continue_()
@@ -65,7 +67,7 @@ def run():
             page.wait_for_load_state("domcontentloaded")
             print("Page loaded.")
 
-            # Scroll to trigger any lazy loading or captcha loading
+            # Scroll to ensure captcha loads
             page.mouse.move(200, 200)
             time.sleep(0.5)
             page.mouse.wheel(0, 500)
@@ -85,7 +87,6 @@ def run():
 
             captcha_img = page.locator(captcha_selector)
             captcha_bytes = captcha_img.screenshot()
-            # Save captcha image for debugging
             captcha_img.screenshot(path="captcha_seen.png")
             print("Saved captcha image as captcha_seen.png")
 
@@ -95,7 +96,7 @@ def run():
                 print("OCR failed to read captcha. Check captcha_seen.png")
                 return
 
-            # Double-check captcha has not changed after OCR
+            # Ensure captcha hasn't changed
             captcha_img_new_bytes = captcha_img.screenshot()
             if captcha_bytes != captcha_img_new_bytes:
                 print("Captcha image refreshed after OCR, aborting.")
@@ -103,7 +104,6 @@ def run():
 
             print("Filling form with data...")
 
-            # Fill dropdowns - add try/except around selects for robustness
             try:
                 page.select_option("select[name='years']", "3")
                 debug_payload["years"] = "3"
@@ -149,7 +149,7 @@ def run():
                 print(f"{k} : {v}")
             print("==========================\n")
 
-            # Save debug info as JSON
+            # Save debug metadata
             with open("debug_form.json", "w", encoding="utf-8") as f:
                 json.dump(debug_payload, f, indent=4)
 
@@ -158,22 +158,18 @@ def run():
                 page.click("button[type='submit']")
                 page.wait_for_load_state("networkidle", timeout=15000)
             except Exception as e:
-                print("Error during form submission or waiting for network idle:", e)
+                print("Error submitting form:", e)
                 traceback.print_exc()
 
-            # Take screenshots after submission
+            # Screenshots
             page.screenshot(path="before_submit.png")
             page.screenshot(path="after_submit.png")
             page.screenshot(path="after_submit_full.png", full_page=True)
 
-            # Save final HTML content
-            html = page.content()
             with open("property_result.html", "w", encoding="utf-8") as f:
-                f.write(html)
+                f.write(page.content())
 
-            print("Saved output HTML to property_result.html")
-            print("Saved debug JSON to debug_form.json")
-            print("Saved captcha screenshot to captcha_seen.png")
+            print("Saved output HTML and screenshots")
 
         except Exception as e:
             print("Unexpected error in run():", e)
@@ -181,7 +177,8 @@ def run():
 
         finally:
             print("Closing browser...")
-            browser.close()
+            if browser:       # << FIX HERE
+                browser.close()
 
 
 if __name__ == "__main__":
